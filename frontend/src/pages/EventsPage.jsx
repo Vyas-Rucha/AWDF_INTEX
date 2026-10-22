@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -52,42 +52,47 @@ function EventsPage() {
   const [bookingMessage, setBookingMessage] = useState({ text: '', type: '' });
   const [bookingLoading, setBookingLoading] = useState(false);
 
-  // Fetch events from Express API (Task 4)
-  const fetchEvents = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('http://localhost:5000/api/v1/events');
-      if (!res.ok) {
-        throw new Error(`Server returned HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setEvents(data);
-      } else if (data.data && Array.isArray(data.data)) {
-        setEvents(data.data);
-      }
-    } catch (err) {
-      // If API fails or backend is starting up, display error and keep fallback
-      setError(`Failed to fetch events from backend (${err.message}). Showing cached events.`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Task 4: Retrieve event information using GET /api/v1/events on mount using useEffect()
   useEffect(() => {
-    fetchEvents();
+    let ignore = false;
+
+    async function loadEvents() {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch('http://localhost:5000/api/v1/events');
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (!ignore) {
+          if (Array.isArray(data)) {
+            setEvents(data);
+          } else if (data.data && Array.isArray(data.data)) {
+            setEvents(data.data);
+          }
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(`Failed to fetch events from backend (${err.message}). Showing cached events.`);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadEvents();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
-  // Set default selected event once events load
-  useEffect(() => {
-    if (events.length > 0 && !selectedEventId) {
-      const firstAvailable = events.find((e) => e.ticketsAvailable > 0);
-      if (firstAvailable) {
-        setSelectedEventId(firstAvailable._id || String(firstAvailable.id));
-      }
-    }
-  }, [events, selectedEventId]);
+  // Compute active selected event cleanly without cascading effect setState
+  const firstAvailable = events.find((e) => e.ticketsAvailable > 0);
+  const activeSelectedEventId =
+    selectedEventId || (firstAvailable ? (firstAvailable._id || String(firstAvailable.id)) : '');
 
   // Task 4 Hint: derive the filtered list with .filter() on render without triggering a new API request
   const filteredEvents = events.filter((evt) =>
@@ -110,7 +115,7 @@ function EventsPage() {
     setBookingMessage({ text: '', type: '' });
 
     const targetEvent = events.find(
-      (ev) => (ev._id || String(ev.id)) === String(selectedEventId)
+      (ev) => (ev._id || String(ev.id)) === String(activeSelectedEventId)
     );
 
     if (!targetEvent) {
@@ -158,7 +163,7 @@ function EventsPage() {
         // Optimistically update ticketsAvailable in state
         setEvents((prev) =>
           prev.map((ev) =>
-            (ev._id || String(ev.id)) === String(selectedEventId)
+            (ev._id || String(ev.id)) === String(activeSelectedEventId)
               ? { ...ev, ticketsAvailable: ev.ticketsAvailable - qty }
               : ev
           )
@@ -173,7 +178,7 @@ function EventsPage() {
       // Local optimistic fallback if backend is offline
       setEvents((prev) =>
         prev.map((ev) =>
-          (ev._id || String(ev.id)) === String(selectedEventId)
+          (ev._id || String(ev.id)) === String(activeSelectedEventId)
             ? { ...ev, ticketsAvailable: ev.ticketsAvailable - qty }
             : ev
         )
@@ -273,7 +278,7 @@ function EventsPage() {
             <select
               id="selectedEventId"
               className="form-control"
-              value={selectedEventId}
+              value={activeSelectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
               required
             >

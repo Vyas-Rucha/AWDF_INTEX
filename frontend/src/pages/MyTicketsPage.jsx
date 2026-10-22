@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 function MyTicketsPage() {
@@ -8,54 +8,65 @@ function MyTicketsPage() {
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
 
-  const fetchMyTickets = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const authToken = token || localStorage.getItem('eventhub_token');
-      const res = await fetch('http://localhost:5000/api/v1/tickets/my', {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setTickets(data);
-      } else if (data.data && Array.isArray(data.data)) {
-        setTickets(data.data);
-      }
-    } catch {
-      // Offline fallback mock data for testing
-      setTickets([
-        {
-          _id: 'tkt-mock-1',
-          quantity: 2,
-          bookingDate: new Date().toISOString(),
-          status: 'booked',
-          eventId: {
-            title: 'Web Development Workshop',
-            date: '2026-11-15',
-            venue: 'CSPIT Auditorium',
-          },
-          attendeeId: {
-            name: attendee?.name || 'Demo Attendee',
-            email: attendee?.email || 'attendee@eventhub.com',
-          },
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchMyTickets();
-  }, []);
+    let ignore = false;
+
+    async function loadTickets() {
+      setLoading(true);
+      setError('');
+      try {
+        const authToken = token || localStorage.getItem('eventhub_token');
+        const res = await fetch('http://localhost:5000/api/v1/tickets/my', {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!ignore) {
+          if (Array.isArray(data)) {
+            setTickets(data);
+          } else if (data.data && Array.isArray(data.data)) {
+            setTickets(data.data);
+          }
+        }
+      } catch {
+        if (!ignore) {
+          // Offline fallback mock data for testing
+          setTickets([
+            {
+              _id: 'tkt-mock-1',
+              quantity: 2,
+              bookingDate: '2026-10-22T04:00:00.000Z',
+              status: 'booked',
+              eventId: {
+                title: 'Web Development Workshop',
+                date: '2026-11-15',
+                venue: 'CSPIT Auditorium',
+              },
+              attendeeId: {
+                name: attendee?.name || 'Demo Attendee',
+                email: attendee?.email || 'attendee@eventhub.com',
+              },
+            },
+          ]);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadTickets();
+    return () => {
+      ignore = true;
+    };
+  }, [attendee?.email, attendee?.name, token]);
 
   const handleUpdateStatus = async (ticketId, newStatus) => {
     setActionMessage('');
@@ -107,7 +118,7 @@ function MyTicketsPage() {
         </div>
       ) : tickets.length === 0 ? (
         <div className="alert alert-info">
-          You haven't booked any event tickets yet. Head to the Events page to book one!
+          You haven&apos;t booked any event tickets yet. Head to the Events page to book one!
         </div>
       ) : (
         <div className="table-responsive">
@@ -126,6 +137,10 @@ function MyTicketsPage() {
             <tbody>
               {tickets.map((t) => {
                 const eventInfo = t.eventId || {};
+                const bookingDateDisplay = t.bookingDate
+                  ? new Date(t.bookingDate).toLocaleDateString()
+                  : 'N/A';
+
                 return (
                   <tr key={t._id}>
                     <td>
@@ -141,7 +156,7 @@ function MyTicketsPage() {
                       </span>
                     </td>
                     <td>{t.quantity}</td>
-                    <td>{new Date(t.bookingDate || Date.now()).toLocaleDateString()}</td>
+                    <td>{bookingDateDisplay}</td>
                     <td>
                       <span className={`badge badge-${t.status}`}>{t.status}</span>
                     </td>

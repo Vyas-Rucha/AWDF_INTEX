@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * EventCard component (Task 1)
  * Accepts props: title, category, date, venue, ticketsAvailable
